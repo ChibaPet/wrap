@@ -1,0 +1,94 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Getopt::Std;
+
+our $opt_q;
+our $opt_l;
+my $prefix;
+
+sub emit($)
+{
+    my $line = shift;
+
+    if (defined $opt_q) {
+        if ($prefix =~ /.* $/ && $line =~ /^"/) {
+            my $short_prefix = $prefix;
+            $short_prefix =~ s/(.*) $/$1/g;
+            print $short_prefix;
+        } else {
+            print $prefix;
+        }
+    }
+
+    print "$line\n";
+}
+
+getopts('ql:');
+
+defined $opt_l or $opt_l = 77;
+defined $opt_q and $opt_l -= 2;
+
+my $line = "";
+my $starting = 1;
+my $accumulated = 0;
+
+# Possibly consider the second line in instead of the first.
+$_ = <>;
+$prefix = $_;
+chomp $prefix;
+$prefix =~ s/^([^\w.\("]*).*/$1/;
+$prefix =~ s/\[/\\[/;
+
+# Why are we forcing quoting on? Maybe we don't want quoting!
+if ($prefix ne "") {
+    $opt_q = 1;
+    $opt_l -= length $prefix;
+}
+
+do {
+    s/^$prefix//;
+
+    for (split) {
+        s/\s//g;
+        /^$/ and next;
+
+        my $length = length $_;
+
+        # Word alone is longer than acceptable line.
+        if ($length >= $opt_l) {
+            if (not $starting) {
+                emit($line);
+                $line = "";
+                $accumulated = 0;
+            }
+            emit($_);
+            $starting = 1;
+            next;
+        }
+
+        # Word would over-extend line.
+        if ($length + $accumulated >= $opt_l) {
+            emit($line);
+            $starting = 0;
+            $accumulated = $length;
+            $line = $_;
+            next;
+        }
+
+        # Word would not overextend line. Pad it with a space.
+        if (not $starting) {
+            $_ = " " . $_;
+            ++$length;
+        }
+
+        # Accumulate word.
+        $line .= $_;
+        $accumulated += $length;
+        $starting = 0;
+    }
+} while (<>);
+
+$starting or emit($line);
